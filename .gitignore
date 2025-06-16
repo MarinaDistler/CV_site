@@ -1,3 +1,4 @@
 static/images/*
 data/*
-.venv
+.venv/
+__pycache__/
