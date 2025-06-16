@@ -194,8 +194,10 @@ def product_detail(product_id):
         product = {
             "id": product_id,
             "name": product_data_dict.get('name', 'Нет названия'),
-            # .replace('\\n', '<br>') будет работать корректно, так как description - строка
-            "description": product_data_dict.get('description', 'Нет описания').replace('\\n', '<br>'),
+            "description": product_data_dict.get('description', 'Нет описания')
+                                 .replace('\r\n', '<br>') 
+                                 .replace('\n', '<br>')   
+                                 .replace('\r', '<br>'),
             "price": product_data_dict.get('price', 'Н/Д'),
             "url": product_data_dict.get('url', '#'),
             "category": product_data_dict.get('category', 'Н/Д'),
