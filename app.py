@@ -1,7 +1,7 @@
+import os
 from flask import Flask, render_template, request, url_for, send_from_directory
 import pandas as pd
 import numpy as np
-import os
 import json
 import pickle
 import torch
@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 # --- Константы и конфигурация ---
 CSV_METADATA_PATH = os.path.join(app.root_path, 'data', 'products.csv')
-PKL_EMBEDDINGS_PATH = os.path.join(app.root_path, 'embeddings', 'embeddings_ruclip_finetuned.pkl')
+PKL_EMBEDDINGS_PATH = os.path.join(app.root_path, 'data', 'embeddings_ruclip_finetuned.pkl')
 FAISS_INDEX_PATH = os.path.join(app.root_path, 'data', 'faiss_index.bin')
 PRODUCT_DATA_JSON_PATH = os.path.join(app.root_path, 'data', 'products_combined_data.json')
 
@@ -26,7 +26,7 @@ RUCLIP_PREPROCESS = None
 DEVICE = None
 EMBEDDING_DIM = None
 
-N_RESULTS = 10
+N_RESULTS = 9
 
 # --- Функция для получения эмбеддинга текста (для запроса) ---
 def get_query_embedding(text_query: str, model, processor, model_name_str, device_str):
@@ -51,33 +51,29 @@ def load_model():
     print(f"Используется устройство: {DEVICE}")
 
     print("Загрузка RuCLIP модели...")
-    try:
-        RUCLIP_MODEL, RUCLIP_PREPROCESS = ruclip.load('ruclip-vit-base-patch32-224', device=DEVICE)
+    RUCLIP_MODEL, RUCLIP_PREPROCESS = ruclip.load('ruclip-vit-base-patch32-224', device=DEVICE)
+    
+    finetuned_weights_path = os.path.join(app.root_path, 'data', 'ruclip_finetuned.pt')
+    if os.path.exists(finetuned_weights_path):
+        RUCLIP_MODEL.load_state_dict(torch.load(finetuned_weights_path, map_location=DEVICE), strict=False)
+        print(f"Загружены fine-tuned веса из {finetuned_weights_path}")
+    else:
+        print(f"Внимание: Fine-tuned веса не найдены по пути {finetuned_weights_path}. Используется базовая модель.")
+
+    RUCLIP_MODEL.eval()
+    
+    with torch.no_grad():
+        test_image_path = os.path.join(app.root_path, 'static', 'images', 'no_image.jpg')
+        if not os.path.exists(test_image_path):
+            Image.new('RGB', (224, 224), color = 'red').save(test_image_path)
         
-        finetuned_weights_path = os.path.join(app.root_path, 'models', 'ruclip_finetuned.pt')
-        if os.path.exists(finetuned_weights_path):
-            RUCLIP_MODEL.load_state_dict(torch.load(finetuned_weights_path, map_location=DEVICE), strict=False)
-            print(f"Загружены fine-tuned веса из {finetuned_weights_path}")
-        else:
-            print(f"Внимание: Fine-tuned веса не найдены по пути {finetuned_weights_path}. Используется базовая модель.")
+        test_image = Image.open(test_image_path).convert('RGB')
+        processed_image = RUCLIP_PREPROCESS(images=[test_image], return_tensors='pt')['pixel_values']
+        test_embedding = RUCLIP_MODEL.encode_image(processed_image.to(DEVICE)).cpu()
+        EMBEDDING_DIM = test_embedding.shape[1]
+        os.remove(test_image_path)
 
-        RUCLIP_MODEL.eval()
-        
-        with torch.no_grad():
-            test_image_path = os.path.join(app.root_path, 'static', 'images', 'no_image.jpg')
-            if not os.path.exists(test_image_path):
-                Image.new('RGB', (224, 224), color = 'red').save(test_image_path)
-            
-            test_image = Image.open(test_image_path).convert('RGB')
-            processed_image = RUCLIP_PREPROCESS(images=[test_image], return_tensors='pt')['pixel_values']
-            test_embedding = RUCLIP_MODEL.encode_image(processed_image.to(DEVICE)).cpu()
-            EMBEDDING_DIM = test_embedding.shape[1]
-            os.remove(test_image_path)
-
-        print(f"Размерность эмбеддингов изображений модели: {EMBEDDING_DIM}")
-
-    except Exception as e:
-        raise RuntimeError(f"Ошибка при загрузке RuCLIP модели: {e}")
+    print(f"Размерность эмбеддингов изображений модели: {EMBEDDING_DIM}")
 
 def prepare_data_and_index():
     """
@@ -112,12 +108,8 @@ def prepare_data_and_index():
     # Убедимся, что колонка 'url' присутствует и не пуста для объединения
     if 'url' not in metadata_df.columns:
         raise ValueError("В CSV файле отсутствует обязательная колонка 'url' для объединения.")
-    # Убедимся, что 'id' присутствует, если PRODUCT_ID_MAP его использует
-    if 'id' not in metadata_df.columns:
-         raise ValueError("В CSV файле отсутствует обязательная колонка 'id', необходимая для PRODUCT_ID_MAP.")
 
     metadata_df['url'] = metadata_df['url'].fillna('').astype(str) # Принудительно приводим url к str
-    metadata_df['id'] = metadata_df['id'].fillna('').astype(str) # Принудительно приводим id к str
 
     metadata_df = metadata_df[metadata_df['url'] != '']
     
@@ -220,6 +212,7 @@ def load_data():
         
         FAISS_INDEX = faiss.read_index(FAISS_INDEX_PATH)
         
+        COMBINED_PRODUCTS_DF['id'] = COMBINED_PRODUCTS_DF.index
         PRODUCT_ID_MAP = {str(row['id']): row.to_dict() for idx, row in COMBINED_PRODUCTS_DF.iterrows()}
         print(f"Загружено {len(COMBINED_PRODUCTS_DF)} товаров и FAISS индекс.")
     else:
@@ -267,6 +260,9 @@ def index():
                 print(f"ERROR: {error_message}")
                 return render_template('index.html', search_results=[], query_text=query_text, error_message=error_message)
 
+            # Временный список для сбора данных, которые потом будут отсортированы
+            collected_results = [] 
+
             for i, df_idx in enumerate(neighbor_indices):
                 if df_idx not in COMBINED_PRODUCTS_DF.index:
                     print(f"Внимание: Индекс DataFrame {df_idx} из FAISS не найден в COMBINED_PRODUCTS_DF. Пропускаем.")
@@ -274,12 +270,27 @@ def index():
 
                 product_data = COMBINED_PRODUCTS_DF.loc[df_idx].to_dict()
                 
-                similarity = 1 - (distances[i] ** 2) / 2
+                similarity = 1 - (distances[i] ** 2) / 2 # L2 dist to cosine sim
                 if similarity < 0: similarity = 0
                 if similarity > 1: similarity = 1
 
+                # Собираем данные и схожесть в промежуточный список
+                collected_results.append({
+                    "product_data": product_data,
+                    "similarity": similarity
+                })
+            
+            # --- ГЛАВНОЕ ИЗМЕНЕНИЕ: СОРТИРОВКА! ---
+            # Сортируем собранные результаты по убыванию схожести
+            collected_results.sort(key=lambda x: x["similarity"], reverse=True)
+
+            # Теперь формируем конечный search_results из отсортированного списка
+            for item in collected_results:
+                product_data = item["product_data"]
+                similarity = item["similarity"]
+
                 product_result = {
-                    "id": str(product_data.get('id', '')), # Убедитесь, что ID есть, используйте пустую строку по умолчанию
+                    "id": str(product_data.get('id', '')),
                     "name": product_data.get('name', f"Товар {product_data.get('id', 'Н/Д')}"),
                     "price": product_data.get('price', 'Н/Д'),
                     "url": product_data.get('url', '#'),
@@ -304,7 +315,7 @@ def index():
                     product_result['image_paths'].append(os.path.join('images', 'no_image.jpg'))
 
                 search_results.append(product_result)
-            print(f"Final search_results count after image check: {len(search_results)}")
+            print(f"Final search_results count: {len(search_results)}")
 
     return render_template('index.html', search_results=search_results, query_text=query_text, error_message=error_message)
 
@@ -351,11 +362,5 @@ def custom_static(filename):
     return send_from_directory(app.static_folder, filename)
 
 if __name__ == '__main__':
-    try:
-        load_data()
-    except Exception as e:
-        print(f"КРИТИЧЕСКАЯ ОШИБКА ПРИ ЗАГРУЗКЕ ДАННЫХ: {e}")
-        print("Приложение не может быть запущено. Убедитесь в наличии 'models/ruclip_finetuned.pt', 'data/products.csv', 'embeddings/embeddings_ruclip_finetuned.pkl' и корректности путей к изображениям.")
-        exit(1)
-
-    app.run(debug=True)
+    load_data()
+    app.run()
