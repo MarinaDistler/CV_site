@@ -40,30 +40,32 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <p><strong>Описание:</strong> {{ product.description }}</p>
-                {% if product.price and product.price != 'Н/Д' %}
+                {% if product.description %}
+                    <p><strong>Описание:</strong> {{ product.description | safe }}</p>
+                {% endif %}
+
+                {% if product.price %}
                     <p><strong>Цена:</strong> {{ product.price }}</p>
                 {% endif %}
                 {% if product.url and product.url != '#' %}
                     <p><strong>Оригинальная страница:</strong> <a href="{{ product.url }}" target="_blank">{{ product.url }}</a></p>
                 {% endif %}
-                {% if product.category and product.category != 'Н/Д' %}
+                {% if product.category %}
                     <p><strong>Категория:</strong> {{ product.category }}</p>
                 {% endif %}
-                {% if product.design_size and product.design_size != 'Н/Д' %}
+                {% if product.design_size %}
                     <p><strong>Размер дизайна:</strong> {{ product.design_size }}</p>
                 {% endif %}
-                {% if product.stitch_count and product.stitch_count != 'Н/Д' %}
+                {% if product.stitch_count %}
                     <p><strong>Количество стежков:</strong> {{ product.stitch_count }}</p>
                 {% endif %}
-                {% if product.color_count and product.color_count != 'Н/Д' %}
+                {% if product.color_count %}
                     <p><strong>Количество цветов:</strong> {{ product.color_count }}</p>
                 {% endif %}
-                {% if product.file_formats and product.file_formats != 'Н/Д' %}
+                {% if product.file_formats %}
                     <p><strong>Форматы файлов:</strong> {{ product.file_formats }}</p>
                 {% endif %}
-                
-                </div>
+            </div>
         </div>
 
         <a href="{{ url_for('index') }}" class="btn btn-secondary mt-4">Вернуться к поиску</a>
