@@ -27,6 +27,7 @@ DEVICE = None
 EMBEDDING_DIM = None
 
 N_RESULTS = 9
+SIMILARITY_THRESHOLD = 0.001
 
 # --- Функция для получения эмбеддинга текста (для запроса) ---
 def get_query_embedding(text_query: str, model, processor, model_name_str, device_str):
@@ -275,10 +276,15 @@ def index():
                 if similarity > 1: similarity = 1
 
                 # Собираем данные и схожесть в промежуточный список
-                collected_results.append({
-                    "product_data": product_data,
-                    "similarity": similarity
-                })
+
+                if similarity >= SIMILARITY_THRESHOLD: 
+                    collected_results.append({
+                        "product_data": product_data,
+                        "similarity": similarity
+                    })
+                else:
+                    # Опционально: Вывести, сколько результатов было отфильтровано
+                    print(f"Отфильтрован результат с ID {product_data.get('id', 'Н/Д')} из-за низкой схожести: {similarity:.4f} < {SIMILARITY_THRESHOLD:.4f}")
             
             # --- ГЛАВНОЕ ИЗМЕНЕНИЕ: СОРТИРОВКА! ---
             # Сортируем собранные результаты по убыванию схожести
