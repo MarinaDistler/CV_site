@@ -26,7 +26,11 @@ def generate_and_save_dummy_embeddings():
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"Ошибка: CSV файл не найден по пути {CSV_PATH}. Пожалуйста, убедитесь, что 'products.csv' существует.")
 
-    PRODUCTS_DF = pd.read_csv(CSV_PATH)
+    specific_dtypes = {
+        **{f'local_image_path_{i}': str for i in range(1, 29)},
+        **{f'image_url_{i}': str for i in range(1, 29)},
+    }
+    PRODUCTS_DF = pd.read_csv(CSV_PATH, dtype=specific_dtypes)
 
     # --- Обработка всех потенциально пустых полей ---
     # Список колонок, которые могут быть None и должны быть строками

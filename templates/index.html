@@ -31,7 +31,7 @@
                 <div class="col">
                     <div class="card h-100 product-card">
                         <a href="{{ url_for('product_detail', product_id=product.id) }}" class="text-decoration-none text-dark">
-                            <div id="carouselProduct{{ product.id }}" class="carousel slide" data-bs-ride="carousel" data-bs-interval="false">
+                            <div id="carouselProduct{{ product.id }}" class="carousel slide" data-bs-interval="false">
                                 <div class="carousel-inner">
                                     {% for image_path in product.image_paths %}
                                     <div class="carousel-item {% if loop.first %}active{% endif %}">
