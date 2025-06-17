@@ -27,7 +27,7 @@ DEVICE = None
 EMBEDDING_DIM = None
 
 N_RESULTS = 9
-SIMILARITY_THRESHOLD = 0.001
+SIMILARITY_THRESHOLD = 0.0001
 
 # --- Функция для получения эмбеддинга текста (для запроса) ---
 def get_query_embedding(text_query: str, model, processor, model_name_str, device_str):
